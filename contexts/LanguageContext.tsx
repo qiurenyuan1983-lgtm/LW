@@ -48,6 +48,8 @@ const translations = {
     // Rules Toolbar
     searchPlaceholder: "Search locations...",
     logException: "Log Exception",
+    // FIX: Add new translation key.
+    containerMap: "Container Map",
     inventory: "Inventory",
     unload: "Unload",
     plan: "Plan",
@@ -113,6 +115,8 @@ const translations = {
     confirmReset: "Reset to defaults? All changes will be lost.",
     removeTag: "Remove tag",
     importSuccess: "Import successful!",
+    // FIX: Add new translation key.
+    containerMapImportSuccess: "Container map updated",
     deductedPallets: "Deducted pallets based on outbound sheet.",
     
     // Add Rule
@@ -166,6 +170,8 @@ const translations = {
     // Rules Toolbar
     searchPlaceholder: "搜索库位、备注...",
     logException: "异常登记",
+    // FIX: Add new translation key.
+    containerMap: "柜号映射",
     inventory: "盘点单",
     unload: "拆柜单",
     plan: "排位表",
@@ -231,6 +237,8 @@ const translations = {
     confirmReset: "确定恢复默认？所有更改将丢失。",
     removeTag: "移除标签",
     importSuccess: "导入成功！",
+    // FIX: Add new translation key.
+    containerMapImportSuccess: "柜号映射已更新",
     deductedPallets: "根据出库单已扣减托盘。",
 
     // Add Rule

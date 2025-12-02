@@ -1,9 +1,12 @@
 
+
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { LocationRule, UserRole, ColumnConfig, LOCATION_TYPES, DESTINATION_OPTIONS, UnloadPlan, DestContainerMap } from '../types';
 import * as XLSX from 'xlsx';
 import { parseUnloadSheet, assignLocationsForUnload, parseOutboundSheet } from '../services/excelService';
-import { Search, Plus, RotateCcw, Download, Upload, Settings, X, Trash2, AlertTriangle, FileText, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+// FIX: Add Sheet icon for new import button.
+import { Search, Plus, RotateCcw, Download, Upload, Settings, X, Trash2, AlertTriangle, FileText, ArrowUp, ArrowDown, ArrowUpDown, Sheet } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface Props {
@@ -14,6 +17,19 @@ interface Props {
 }
 
 const DEST_CONTAINER_KEY = "la_dest_container_map_v1";
+
+const defaultCapacities: Record<string, number | null> = {
+  amz2: 30,
+  amzflex: 30,
+  sehin: 30,
+  private: 16,
+  mixed: 16,
+  buffer: 20,
+  express: 10,
+  highvalue: 8,
+  other: null,
+};
+
 
 const Rules: React.FC<Props> = ({ rules, setRules, userRole, addLog }) => {
   const { t } = useLanguage();
@@ -61,7 +77,7 @@ const Rules: React.FC<Props> = ({ rules, setRules, userRole, addLog }) => {
   const [destContainerMap, setDestContainerMap] = useState<DestContainerMap>({});
 
   // New Rule State
-  const [newRule, setNewRule] = useState<Partial<LocationRule>>({ type: 'other' });
+  const [newRule, setNewRule] = useState<Partial<LocationRule>>({ type: 'other', maxPallet: defaultCapacities.other });
 
   // Plan State
   const [lastPlan, setLastPlan] = useState<UnloadPlan | null>(null);
@@ -74,6 +90,15 @@ const Rules: React.FC<Props> = ({ rules, setRules, userRole, addLog }) => {
     if (isOperator) return ['curPallet', 'destinations', 'note'].includes(field);
     return false;
   };
+
+  // Pre-fill max pallets based on type for new rule
+  useEffect(() => {
+    if (newRule.type) {
+        const capacity = defaultCapacities[newRule.type];
+        setNewRule(prev => ({ ...prev, maxPallet: capacity }));
+    }
+  }, [newRule.type]);
+
 
   // Load container map on init
   useEffect(() => {
@@ -315,6 +340,54 @@ const Rules: React.FC<Props> = ({ rules, setRules, userRole, addLog }) => {
       e.target.value = '';
   }
 
+  // FIX: Implement container map import handler.
+  const handleContainerMapImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+          try {
+            const data = new Uint8Array(ev.target?.result as ArrayBuffer);
+            const wb = XLSX.read(data, {type: 'array'});
+            const sheet = wb.Sheets[wb.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(sheet) as any[];
+            
+            const newMap = { ...destContainerMap }; // Start with existing map
+            let updatedCount = 0;
+            json.forEach(row => {
+               const dest = row['Destination'] || row['目的地'];
+               const container = row['Container'] || row['柜号'];
+               if(dest && container) {
+                   const destStr = String(dest).trim();
+                   const containerStr = String(container).trim();
+                   if (!newMap[destStr]) {
+                       newMap[destStr] = [];
+                   }
+                   if (!newMap[destStr].includes(containerStr)) {
+                       newMap[destStr].push(containerStr);
+                       updatedCount++;
+                   }
+               }
+            });
+            if(updatedCount === 0 && json.length > 0) {
+                const firstRow = json[0];
+                if (!firstRow['Destination'] && !firstRow['目的地'] && !firstRow['Container'] && !firstRow['柜号']) {
+                     alert("Import failed: Could not find 'Destination'/'目的地' or 'Container'/'柜号' columns in the file.");
+                     return;
+                }
+            }
+            setDestContainerMap(newMap);
+            addLog(`Container Map Import: Updated with ${updatedCount} new mappings.`);
+            alert(`${t('importSuccess')} ${t('containerMapImportSuccess')} (${updatedCount})`);
+          } catch(err) {
+            console.error("Failed to import container map", err);
+            alert("Failed to import. Please check file format.");
+          }
+      };
+      reader.readAsArrayBuffer(file);
+      e.target.value = '';
+  }
+
   // --- Rendering ---
 
   const sortedColumns = useMemo(() => [...columns].sort((a,b) => a.order - b.order).filter(c => c.visible), [columns]);
@@ -442,6 +515,11 @@ const Rules: React.FC<Props> = ({ rules, setRules, userRole, addLog }) => {
                 >
                     <AlertTriangle size={16} /> {t('logException')}
                 </button>
+                {/* FIX: Add container map import button */}
+                <label className="flex items-center gap-2 px-3 py-2 bg-cyan-50 text-cyan-700 rounded-lg hover:bg-cyan-100 border border-cyan-200 text-sm font-medium cursor-pointer transition-colors">
+                    <Sheet size={16} /> {t('containerMap')}
+                    <input type="file" className="hidden" accept=".xlsx,.xls" onChange={handleContainerMapImport} />
+                </label>
                 <label className="flex items-center gap-2 px-3 py-2 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 border border-purple-200 text-sm font-medium cursor-pointer transition-colors">
                     <FileText size={16} /> {t('inventory')}
                     <input type="file" className="hidden" accept=".xlsx,.xls" onChange={handleInventoryImport} />
@@ -532,7 +610,7 @@ const Rules: React.FC<Props> = ({ rules, setRules, userRole, addLog }) => {
                     {LOCATION_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
                 <input placeholder={t('maxPal')} type="number" className="border p-2 rounded w-20"
-                    value={newRule.maxPallet || ''} onChange={e => setNewRule({...newRule, maxPallet: Number(e.target.value)})} />
+                    value={newRule.maxPallet ?? ''} onChange={e => setNewRule({...newRule, maxPallet: e.target.value === '' ? null : Number(e.target.value)})} />
                 <input placeholder={t('allowDest')} type="number" className="border p-2 rounded w-20" 
                      value={newRule.allowedDest || ''} onChange={e => setNewRule({...newRule, allowedDest: Number(e.target.value)})} />
                 <input placeholder={t('note')} className="border p-2 rounded flex-1 min-w-[150px]" 
